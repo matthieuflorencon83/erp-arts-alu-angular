@@ -9,6 +9,16 @@ Il doit être consulté avant toute modification SQL.
 - **Charset** : `utf8mb4_unicode_ci`
 - **Convention** : Noms de tables et colonnes en **Français** (strictement identiques aux maquettes utilisateur).
 
+> [!CAUTION]
+> **ATTENTION AUX FAUX AMIS** :
+> Le projet contient des résidus d'une ancienne version Django (`backend-python`).
+> Ne **JAMAIS** utiliser les tables suivantes qui peuvent apparaître dans les outils d'analyse :
+>
+> - `commandes_*` (ex: `commandes_article`)
+> - `auth_*`, `django_*`, `core_*`
+>
+> **SEULES** les tables listées ci-dessous sont valides pour le projet `erp_arts_alu`.
+
 ## Liste des Tables
 
 ### 1. Entités Principales

@@ -4,6 +4,8 @@ import { calculController } from './controllers/CalculController.js';
 const router = express.Router();
 
 // Routes /api/calcul
-router.post('/optimize', (req, res) => calculController.optimize(req, res));
+// Routes /api/calcul
+router.post('/optimize/:affaireId?', (req, res) => calculController.optimize(req, res));
+router.get('/health', (req, res) => calculController.health(req, res));
 
 export default router;

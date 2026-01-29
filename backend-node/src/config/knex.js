@@ -1,38 +1,26 @@
+
 import knex from 'knex';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// Load env vars if not already loaded
-dotenv.config();
-
+// Handling __dirname in ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const config = {
+// Initialiser dotenv avec le chemin correct vers le fichier .env racine
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+
+const db = knex({
     client: 'mysql2',
     connection: {
-        host: process.env.DB_HOST,
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
+        host: process.env.DB_HOST || 'localhost',
+        user: process.env.DB_USER || 'root',
+        password: process.env.DB_PASSWORD || '',
         database: process.env.DB_NAME || 'erp_arts_alu',
-        port: Number(process.env.DB_PORT) || 3306,
-        dateStrings: true // Important for handling dates as strings in JSON/API
+        port: process.env.DB_PORT || 3306
     },
-    pool: {
-        min: 2,
-        max: 10
-    }
-};
-
-const db = knex(config);
-
-// "Virtual MCP" Check: Verify connection on startup
-db.raw('SELECT 1')
-    .then(() => console.log('✅ [Knex] Connected to Database'))
-    .catch((err) => {
-        console.error('❌ [Knex] Connection Failed:', err.message);
-        process.exit(1);
-    });
+    pool: { min: 2, max: 10 }
+});
 
 export default db;

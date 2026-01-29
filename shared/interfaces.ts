@@ -51,8 +51,12 @@ export interface Article {
 
     // Virtual/Joined properties
     image_url?: string;
-    prix_unitaire?: number; // Added to fix frontend type errors
-    fournisseur?: string; // Added to fix frontend type errors
+    prix_unitaire?: number;
+    fournisseur?: string;
+    poids?: number; // Aliased from poid
+    superficie?: string; // Placeholder
+    ancien_prix?: number; // Placeholder
+    date_prix?: string; // Placeholder 
 }
 
 export interface Affaire {

@@ -1,39 +1,50 @@
-import { calculService } from '../services/CalculService.js';
-import { z } from 'zod';
-
-// Schéma de validation STRICT (Shift-Left Security)
-const optimizationSchema = z.object({
-    stock_options: z.array(z.object({
-        ref: z.string(),
-        len_mm: z.number().int().positive()
-    })).min(1),
-    cuts_mm: z.array(z.number().int().positive()).min(1),
-    saw_kerf: z.number().int().nonnegative().default(4),
-    scrap_end: z.number().int().nonnegative().default(0)
-});
+import { pythonService } from '../services/PythonService.js';
 
 class CalculController {
 
-    /**
-     * POST /optimize
-     * Endpoint public pour lancer un calcul.
-     */
     async optimize(req, res) {
         try {
-            // 1. Validation Shift-Left
-            const validatedData = optimizationSchema.parse(req.body);
+            const { affaireId } = req.params;
+            const payload = req.body;
 
-            // 2. Appel Service
-            const result = await calculService.lancerOptimisation(validatedData);
-
-            // 3. Réponse 200 OK
-            res.json(result);
-        } catch (error) {
-            if (error instanceof z.ZodError) {
-                return res.status(400).json({ error: "Données invalides", details: error.errors });
+            /* 
+               Verification basique : on s'assure que le payload contient 'barres' et 'pieces'.
+            */
+            if (!payload.barres || !payload.pieces) {
+                return res.status(400).json({ error: "Payload invalide : 'barres' et 'pieces' requis." });
             }
-            res.status(500).json({ error: error.message });
+
+            console.log(`[CalculController] Optimisation demandée pour l'affaire ${affaireId || 'Unknown'}`);
+
+            // Transformation du payload (Node Interface -> Python Interface)
+            const pythonPayload = {
+                stock_options: payload.barres.map(b => ({
+                    ref: `Barre ${b.longueur}`,
+                    len_mm: b.longueur
+                })),
+                cuts_mm: payload.pieces.flatMap(p => Array(p.quantite).fill(p.longueur)),
+                saw_kerf: 4,
+                scrap_end: 0
+            };
+
+            // Call Python Engine
+            const result = await pythonService.optimize(pythonPayload);
+
+            return res.json({
+                success: true,
+                source: 'python-engine',
+                data: result
+            });
+
+        } catch (error) {
+            console.error('[CalculController] Error:', error.message);
+            return res.status(500).json({ error: error.message });
         }
+    }
+
+    async health(req, res) {
+        const isAlive = await pythonService.checkHealth();
+        res.json({ status: isAlive ? 'UP' : 'DOWN', service: 'python-engine' });
     }
 }
 

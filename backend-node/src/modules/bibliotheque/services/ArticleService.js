@@ -2,29 +2,53 @@ import db from '../../../config/knex.js';
 
 /**
  * Service: Article
- * Handles Article Repository and complex Business Logic (JSON metadata)
+ * Handles Article Repository with standard MySQL schema
  */
 class ArticleService {
 
     /**
-     * List all articles with basic info (Optimized for list view)
+     * List all articles with basic info
      */
     async getAllArticles() {
+        // Subquery to get the cheapest supplier for each article
+        const primarySupplier = db('article_fournisseur')
+            .select('code_art', 'code_fou', 'prix_u_ht')
+            .rowNumber('rn', ['code_art'], ['prix_u_ht']); // This implies Knex supports logic, but Knex doesn't have .rowNumber built-in like this.
+
+        // Reverting to Raw Query for the subquery part as Knex builder for Window Functions is verbose
+        // Reverting to Raw Query for the subquery part as Knex builder for Window Functions is verbose
+        const subquery = db.select('code_art', 'code_fou', 'prix_u_ht')
+            .from(function () {
+                this.select('af.code_art', 'af.code_fou', 'af.prix_u_ht',
+                    db.raw('ROW_NUMBER() OVER (PARTITION BY af.code_art ORDER BY (f.nom_court IS NOT NULL AND f.nom_court != "") DESC, af.prix_u_ht ASC) as rn'))
+                    .from('article_fournisseur as af')
+                    .leftJoin('fournisseur as f', 'af.code_fou', 'f.code_fou')
+                    .as('ranked');
+            })
+            .where('rn', 1)
+            .as('af');
+
         return db('article as a')
             .leftJoin('unite as u', 'a.unite', 'u.code')
             .leftJoin('image as i', 'a.id_image', 'i.id')
+            .leftJoin(subquery, 'a.code_art', 'af.code_art')
+            .leftJoin('fournisseur as f', 'af.code_fou', 'f.code_fou')
             .select(
                 'a.code_art',
                 'a.designation',
                 'a.famille',
+                'a.type',
                 'a.tenu_en_stock',
                 'u.unite_1 as libelle_unite',
-                'i.chemin as image_url'
+                'i.chemin as image_url',
+                'f.nom_court as fournisseur',
+                'af.prix_u_ht as prix_unitaire',
+                'a.poid as poids'
             );
     }
 
     /**
-     * Get full article details including generic JSON metadata handling
+     * Get full article details
      */
     async getArticle(code_art) {
         const article = await db('article as a')
@@ -33,20 +57,17 @@ class ArticleService {
             .select(
                 'a.*',
                 'u.unite_1 as libelle_unite',
-                'i.chemin as image_url'
+                'i.chemin as image_url',
+                'a.poid as poids'
             )
             .where('a.code_art', code_art)
             .first();
 
         if (!article) return null;
 
-        // Logic JSON: "implémenter une logique qui permet de lire/écrire dans la colonne JSON si elle existe"
-        // Since the current schema strictly follows the Excel (no json column on article),
-        // we prepare the field structurally for the Frontend contract.
-        // If we add a 'meta_donnee' column later, this line just works.
-        article.metadata = article.meta_donnee || {};
+        article.metadata = {}; // Placeholder
 
-        // Retrieve Supplier prices for this article
+        // Retrieve Supplier prices
         const suppliers = await db('article_fournisseur as af')
             .leftJoin('fournisseur as f', 'af.code_fou', 'f.code_fou')
             .select('af.*', 'f.nom_court')
@@ -59,28 +80,9 @@ class ArticleService {
 
     /**
      * Create a new article
-     * Handles JSON metadata mapping if necessary
      */
     async createArticle(data) {
-        const { metadata, ...sqlData } = data;
-
-        // "Logic JSON": if schema evolves to have 'meta_donnee', we map it here.
-        // For now, if the schema is strict SQL (as per image), we just insert what fits.
-        // However, DATABASE_MEMO says: "Utilise une colonne meta_donnee (JSON)..." for GED but
-        // for Article it lists: "Liaison: id_image".
-        // Wait, let's re-read DATABASE_MEMO for Article.
-        // Line 21: "Clé : code_art... Liaison...". It does NOT explicitly list a JSON column for Article,
-        // BUT the prompt says "Pour la table article, implémenter une logique qui permet de lire/écrire
-        // dans la colonne JSON si elle existe".
-
-        // Safety check: if 'meta_donnee' column exists in input, we use it, otherwise we ignore metadata for now
-        // or store it in a future-proof way.
-
-        // For strict compliance with the current schema (derived from image), we insert `sqlData`.
-        // If we want to be "Hybrid Ready", we can check if `meta_donnee` is in the schema dynamically,
-        // but for now let's stick to the Interface contract.
-
-        await db('article').insert(sqlData);
+        await db('article').insert(data);
         return this.getArticle(data.code_art);
     }
 }
